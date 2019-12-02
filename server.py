@@ -9,14 +9,25 @@ import os
 import base64
 import json
 import time
+#
+from base64 import b64encode
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import pad
+from Crypto.Random import get_random_bytes
+
+from base64 import b64decode
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import unpad
 
 clientConnected_Socket = []
 clientConnected_Name = []
 clientConnected_SessionKey = []
 clientSignedIn_SessionKey = []
+
+arrDataFile = []
 threadLock = False
 
-mydb = mysql.connector.connect(host='localhost',database='anm',user='anm',password='123abnkakashi',port='1998')
+mydb = mysql.connector.connect(host='localhost',database='anm',user='admin',password='admin',port='3306')
 mycursor = mydb.cursor()
 
 welcomeMsg = "Welcome new client please sign in or sign up"
@@ -95,7 +106,17 @@ def clientthread(clientSock,clientAddress):
         threadSend.join()
     else:
         print("Public key not match")
-
+#hàm nhận dữ liệu theo từng Buffer
+def recvall(sock):
+    BUFF_SIZE = 4096 # 4 KiB
+    data = b''
+    while True:
+        part = sock.recv(BUFF_SIZE)
+        data += part
+        if len(part) < BUFF_SIZE:
+            # either 0 or end of data
+            break
+    return data
 # hàm nhận và giải mã tin nhắn, kiểm tra kết nối client đến server
 def recveMsg(key,socket):
     global threadLock
@@ -103,20 +124,42 @@ def recveMsg(key,socket):
     global clientConnected_SessionKey
     global clientSignedIn_SessionKey
     try:
-        eMsg = socket.recv(1024)
+        # eMsg = socket.recv(4096)
+        eMsg = recvall(socket)
+        
+        # print(eMsg)
         if eMsg:
             eMsg = eMsg.decode()
             b64 = json.loads(eMsg)
-            nonce = base64.b64decode(b64['nonce'])
-            ct = base64.b64decode(b64['ciphertext'])
-            # print(eMsg)
-            key = key[:16].encode()   
-            # print(key)
-            aesDecrypt = AES.new(key,AES.MODE_CTR,nonce=nonce)
-            # print(aesDecrypt)
-            dMsg = aesDecrypt.decrypt(ct).decode()
-            print("New mess from client ",socket ," : " , dMsg)
-            return dMsg
+            try :
+                nonce = base64.b64decode(b64['nonce'])
+                ct = base64.b64decode(b64['ciphertext'])
+                # print(eMsg)
+                key = key[:16].encode()   
+                # print(key)
+                aesDecrypt = AES.new(key,AES.MODE_CTR,nonce=nonce)
+                # print(aesDecrypt)
+                dMsg = aesDecrypt.decrypt(ct).decode()
+                print("New mess from client ",socket ," : " , dMsg)
+                return dMsg
+            except:
+                b64 = json.loads(eMsg)
+                iv = b64decode(b64['iv'])
+                ct = b64decode(b64['ciphertext'])
+                ct2 = b64decode(b64['ciphertext2'])
+                key = key[:16].encode()
+                cipher = AES.new(key, AES.MODE_CBC, iv)
+                pt = unpad(cipher.decrypt(ct), AES.block_size)
+                pt2 = unpad(cipher.decrypt(ct2), AES.block_size)
+                print("The message NameFile(string): ", pt.decode())
+                # print("The message data(namefile)", pt2.decode())
+                arr = pt.decode().split("-")
+                nameFile = arr[1]
+                dataFile = pt2
+                arrDataFile.append([nameFile,dataFile]);
+                pt =pt.decode() # pt gồm : EncryFile - Tên file - Người nhận file - Người gửi File
+                print("Luu du lieu data vao mang thanh cong")
+                return pt
     except:
         threadLock = True
         clientConnected_SessionKey.remove(key)    
@@ -152,7 +195,7 @@ def sendeMSg(recvKey,recvSocket,keyArr):
         if (dMsg == "Client disconnected"):
             break
         #tách chuỗi để xét trường hợp
-        MsgArr = dMsg.split()
+        MsgArr = dMsg.split('-')
         # đăng ký
         if (MsgArr[0] == "signup"):
             # mã hóa trước khi cho vào cơ sở dữ liệu(Khoa code)
@@ -180,6 +223,7 @@ def sendeMSg(recvKey,recvSocket,keyArr):
 
             sql = "SELECT * FROM customers WHERE name = %s AND password = %s"
             val = (MsgArr[1], MsgArr[2])
+            print('Tên người dùng :'+MsgArr[1])
             mycursor.execute(sql, val)
             myresult = mycursor.fetchall()
             if (myresult):
@@ -206,6 +250,39 @@ def sendeMSg(recvKey,recvSocket,keyArr):
                     ct = base64.b64encode(ct_bytes).decode('utf-8')
                     eMsg = json.dumps({'nonce':nonce, 'ciphertext':ct}).encode()    
                     s.send(eMsg)
+        #Giải mã thông tin file
+        elif(MsgArr[0] == "EncryFile"):
+            print('Mảng gồm các phần tử :')
+            print(MsgArr)
+            nameFile = MsgArr[1]
+            vitri=0
+            for i in range(len(arrDataFile)) :
+                if(nameFile ==arrDataFile[i][0] ):
+                    vitri=i
+                    print('Tim thay data')
+            for i,name  in enumerate(clientConnected_Name):
+                if (name == MsgArr[2]):
+                    # Mã hóa dữ liệu  gửi cho client 
+                    nameData =  nameFile+"-"+name+"-"+MsgArr[3]
+                    nameData = nameData.encode()
+                    data = arrDataFile[vitri][1]
+                    key = clientConnected_SessionKey[i][:16].encode()
+                    cipher = AES.new(key, AES.MODE_CBC)
+                    
+                    ct_bytesName = cipher.encrypt(pad(nameData, AES.block_size))
+                    ct_bytes = cipher.encrypt(pad(data, AES.block_size))
+                    
+                    iv = b64encode(cipher.iv).decode('utf-8')
+                    ct = b64encode(ct_bytesName).decode('utf-8')
+                    ct2 = b64encode(ct_bytes).decode('utf-8')
+
+                    dataEncryFile = json.dumps({'iv':iv, 'ciphertext':ct, 'ciphertext2':ct2}).encode()
+                    # dataEncryFile = json.dumps({'iv':iv, 'ciphertext2':ct2}).encode()
+                    clientConnected_Socket[i].send(dataEncryFile)
+                    print('Gui data thanh cong cho client :'+name)
+    
+                    
+
         # thực hiện chat
         else:
             for i,name  in enumerate(clientConnected_Name):
@@ -222,6 +299,6 @@ def sendeMSg(recvKey,recvSocket,keyArr):
                     clientConnected_Socket[i].send(eMsg)
 
 if __name__ == "__main__":
-    mydb = mysql.connector.connect(host='localhost',database='anm',user='anm',password='123abnkakashi',port='1998')
+    mydb = mysql.connector.connect(host='localhost',database='anm',user='admin',password='admin',port='3306')
     mycursor = mydb.cursor()
     main() 
