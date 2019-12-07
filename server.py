@@ -4,6 +4,7 @@ import mysql.connector
 from Crypto.PublicKey import RSA
 import Crypto.Cipher.AES as AES
 import Crypto.Cipher.PKCS1_OAEP as PKCS1_OAEP
+from Crypto.Hash import SHA256
 import hashlib
 import os
 import base64
@@ -27,7 +28,7 @@ clientSignedIn_SessionKey = []
 arrDataFile = []
 threadLock = False
 
-mydb = mysql.connector.connect(host='localhost',database='anm',user='admin',password='admin',port='3306')
+mydb = mysql.connector.connect(host='localhost',database='anm',user='anm',password='123abnkakashi',port='1998')
 mycursor = mydb.cursor()
 
 welcomeMsg = "Welcome new client please sign in or sign up"
@@ -156,7 +157,7 @@ def recveMsg(key,socket):
                 arr = pt.decode().split("-")
                 nameFile = arr[1]
                 dataFile = pt2
-                arrDataFile.append([nameFile,dataFile]);
+                arrDataFile.append([nameFile,dataFile])
                 pt =pt.decode() # pt gồm : EncryFile - Tên file - Người nhận file - Người gửi File
                 print("Luu du lieu data vao mang thanh cong")
                 return pt
@@ -198,16 +199,46 @@ def sendeMSg(recvKey,recvSocket,keyArr):
         MsgArr = dMsg.split('-')
         # đăng ký
         if (MsgArr[0] == "signup"):
-            # mã hóa trước khi cho vào cơ sở dữ liệu(Khoa code)
-            
-            sql = "INSERT INTO customers (name, password) VALUES (%s, %s)"
-            #MsgArr[2] là mật khẩu chưa mã hóa thay bằng mật khẩu mã hóa
-            val = (MsgArr[1], MsgArr[2])
-            mycursor.execute(sql, val)
-            mydb.commit()
-            print(mycursor.rowcount, "record inserted.")
-            if (mycursor.rowcount):
-                SuccessMsg = ("Create new user successfully")
+            if (MsgArr[1]!= "" and MsgArr[2]!= ""):
+                # mã hóa trước khi cho vào cơ sở dữ liệu(Khoa code)
+                data=MsgArr[2].encode()
+                hash_object = SHA256.new(data)
+
+                # kiểm tra người dùng có tk chưa?
+                sql = "SELECT * FROM users WHERE name = %s AND password = %s"
+                val = (MsgArr[1], hash_object.hexdigest())
+                # print('Tên người dùng :'+MsgArr[1])
+                mycursor.execute(sql, val)
+                myresult = mycursor.fetchall()
+                if (not myresult):
+                    sql = "INSERT INTO users (name, password) VALUES (%s, %s)"
+                    #MsgArr[2] là mật khẩu chưa mã hóa thay bằng mật khẩu mã hóa
+                    val = (MsgArr[1],hash_object.hexdigest())
+                    mycursor.execute(sql, val)
+                    mydb.commit()
+                    print(mycursor.rowcount, "record inserted.")
+                    if (mycursor.rowcount):
+                        SuccessMsg = ("Create new user successfully")
+                        sendMsg = SuccessMsg.encode()
+                        key = recvKey[:16].encode()
+                        aesEncrypt = AES.new(key,AES.MODE_CTR)
+                        ct_bytes = aesEncrypt.encrypt(sendMsg)
+                        nonce = base64.b64encode(aesEncrypt.nonce).decode('utf-8')
+                        ct = base64.b64encode(ct_bytes).decode('utf-8')
+                        eMsg = json.dumps({'nonce':nonce, 'ciphertext':ct}).encode()   
+                        recvSocket.send(eMsg)
+                else :
+                    SuccessMsg = ("Create new user failed")
+                    sendMsg = SuccessMsg.encode()
+                    key = recvKey[:16].encode()
+                    aesEncrypt = AES.new(key,AES.MODE_CTR)
+                    ct_bytes = aesEncrypt.encrypt(sendMsg)
+                    nonce = base64.b64encode(aesEncrypt.nonce).decode('utf-8')
+                    ct = base64.b64encode(ct_bytes).decode('utf-8')
+                    eMsg = json.dumps({'nonce':nonce, 'ciphertext':ct}).encode()   
+                    recvSocket.send(eMsg)
+            else :
+                SuccessMsg = ("Create new user failed")
                 sendMsg = SuccessMsg.encode()
                 key = recvKey[:16].encode()
                 aesEncrypt = AES.new(key,AES.MODE_CTR)
@@ -220,10 +251,12 @@ def sendeMSg(recvKey,recvSocket,keyArr):
         elif (MsgArr[0] == "login"):
             #Mã hóa mật khẩu mới nhận được để rồi so sánh mật khẩu đang mã hóa trong csdl (Khoa code):
             # MsgArr[2] là mật khẩu chưa mã hóa. Mã hóa xong rồi nhớ thay 
+            data=MsgArr[2].encode()
+            hash_object = SHA256.new(data)
 
-            sql = "SELECT * FROM customers WHERE name = %s AND password = %s"
-            val = (MsgArr[1], MsgArr[2])
-            print('Tên người dùng :'+MsgArr[1])
+            sql = "SELECT * FROM users WHERE name = %s AND password = %s"
+            val = (MsgArr[1], hash_object.hexdigest())
+            # print('Tên người dùng :'+MsgArr[1])
             mycursor.execute(sql, val)
             myresult = mycursor.fetchall()
             if (myresult):
@@ -250,6 +283,17 @@ def sendeMSg(recvKey,recvSocket,keyArr):
                     ct = base64.b64encode(ct_bytes).decode('utf-8')
                     eMsg = json.dumps({'nonce':nonce, 'ciphertext':ct}).encode()    
                     s.send(eMsg)
+            else: 
+                SuccessMsg = ("Login failed")
+                sendMsg = SuccessMsg.encode()
+                key = recvKey[:16].encode()
+                aesEncrypt = AES.new(key,AES.MODE_CTR)
+                ct_bytes = aesEncrypt.encrypt(sendMsg)
+                nonce = base64.b64encode(aesEncrypt.nonce).decode('utf-8')
+                ct = base64.b64encode(ct_bytes).decode('utf-8')
+                eMsg = json.dumps({'nonce':nonce, 'ciphertext':ct}).encode()    
+                recvSocket.send(eMsg)
+                print("Login failed")
         #Giải mã thông tin file
         elif(MsgArr[0] == "EncryFile"):
             print('Mảng gồm các phần tử :')
@@ -299,6 +343,6 @@ def sendeMSg(recvKey,recvSocket,keyArr):
                     clientConnected_Socket[i].send(eMsg)
 
 if __name__ == "__main__":
-    mydb = mysql.connector.connect(host='localhost',database='anm',user='admin',password='admin',port='3306')
+    mydb = mysql.connector.connect(host='localhost',database='anm',user='anm',password='123abnkakashi',port='1998')
     mycursor = mydb.cursor()
     main() 

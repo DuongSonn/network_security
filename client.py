@@ -162,8 +162,6 @@ def recvdMsgTTK(key,client):
             fileButton.grid(row=rowRight,column=7)
             rowRight +=1
             
-
-            
 #hàm  save file
 def saveFile(nameFile,data):
     print("file name :"+nameFile)
@@ -218,17 +216,34 @@ def Signup(key,client):
 #hàm để thực hiện đăng ký
 def FSSignup(key,client):
     sendMsg = "signup-" + nameE.get() + "-" + pwordE.get()
-    threadSend = threading.Thread(target=sendeMsg,args=(key,client,sendMsg,))
-    threadSend.start()
-    threadSend.join()
+    if (nameE.get() != "" and pwordE.get() != ""):
 
-    threadRecv = threading.Thread(target=recvdMsg,args=(key,client,msgQueue,))
-    threadRecv.start()
-    threadRecv.join()
+        threadSend = threading.Thread(target=sendeMsg,args=(key,client,sendMsg,))
+        threadSend.start()
+        threadSend.join()
 
-    if ( msgQueue.get() == "Create new user successfully" ):
-        roots.destroy()
-        Login(key,client)
+        threadRecv = threading.Thread(target=recvdMsg,args=(key,client,msgQueue,))
+        threadRecv.start()
+        threadRecv.join()
+
+        # if ( msgQueue.get() == "Create new user failed" ):
+        #     r = Tk()	
+        #     r.title('D:')
+        #     r.geometry('150x50')
+        #     rlbl = Label(r, text='\n! Invalid Register')
+        #     rlbl.pack()
+        #     r.mainloop()
+
+        if ( msgQueue.get() == "Create new user successfully" ):
+            roots.destroy()
+            Login(key,client)
+    else :
+        r = Tk()	
+        r.title('D:')
+        r.geometry('150x50')
+        rlbl = Label(r, text='\n! Invalid Register')
+        rlbl.pack()
+        r.mainloop()
 
 #khung đăng nhập
 def Login(key,client):
@@ -262,31 +277,40 @@ def Login(key,client):
 #Hàm để thực hiện đăng nhập
 def CheckLogin(key,client):
     sendMsg = "login-" + nameEL.get() + "-" + pwordEL.get()
-    threadSend = threading.Thread(target=sendeMsg,args=(key,client,sendMsg,))
-    threadSend.start()
-    threadSend.join()
+    if (nameEL.get()!= "" and pwordEL.get() != ""):
+        threadSend = threading.Thread(target=sendeMsg,args=(key,client,sendMsg,))
+        threadSend.start()
+        threadSend.join()
 
-    threadRecv = threading.Thread(target=recvdMsg,args=(key,client,msgQueue,))
-    threadRecv.start()
-    threadRecv.join()
-    if ( msgQueue.get() == "Login successfully" ):
         threadRecv = threading.Thread(target=recvdMsg,args=(key,client,msgQueue,))
         threadRecv.start()
         threadRecv.join()
+        if ( msgQueue.get() == "Login successfully" ):
+            threadRecv = threading.Thread(target=recvdMsg,args=(key,client,msgQueue,))
+            threadRecv.start()
+            threadRecv.join()
 
-        global myName
-        myName = nameEL.get()
+            global myName
+            myName = nameEL.get()
 
-        rootA.destroy()
-        data = msgQueue.get().split(',')
-        chat(key,client,data)
+            rootA.destroy()
+            data = msgQueue.get().split(',')
+            chat(key,client,data)
+        if ( msgQueue.get() == "Login failed"):
+            # print("KAx")
+            # r = Tk()	
+            # r.title('D:')
+            # r.geometry('150x50')
+            # rlbl = Label(r, text='\n! Invalid Login')
+            # rlbl.pack()
+            # r.mainloop()	
     else:
         r = Tk()	
         r.title('D:')
         r.geometry('150x50')
-        rlbl = Label(r, text='\n[! Invalid Login')
+        rlbl = Label(r, text='\n! Invalid Login')
         rlbl.pack()
-        r.mainloop()	
+        r.mainloop()
 
 #hàm chuyển đổi khung đăng ký đăng nhập
 def DelUser(key,client):
@@ -325,6 +349,7 @@ def chat(key,client,data):
     x = 0
     y = 0
     #phần nhập tin nhắn
+    global chatF
     chatF=Entry(rootsC , font = ('courier', 15, 'bold'),width = 23)
     chatF.grid(rowspan=2,row=6, column=6, sticky=W )
     
@@ -392,7 +417,8 @@ def MsgChat(key,client,message,chatBox,listbox):
     position = str(x) + "." + str(y)
     
     chatBox.insert(position,displayMsg)
-    
+    message.delete(0, 'end')
+
     x = x + 1
 
 #hàm xử lý tên
