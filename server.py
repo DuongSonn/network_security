@@ -168,9 +168,27 @@ def recveMsg(key,socket):
             if (k == key):
                 clientConnected_Socket.remove(clientConnected_Socket[i])
                 clientSignedIn_SessionKey.remove(key)
+                nameDis = clientConnected_Name[i]
                 clientConnected_Name.remove(clientConnected_Name[i])
-                for i,s in enumerate(clientConnected_Socket):        
+
+                for i,s in enumerate(clientConnected_Socket):
+                    # cập nhật mảng client đang kết nối đến server cho client đang kết nối       
                     sendMsg = json.dumps(clientConnected_Name).encode()
+                    key = clientConnected_SessionKey[i][:16].encode()
+                    aesEncrypt = AES.new(key,AES.MODE_CTR)
+                    ct_bytes = aesEncrypt.encrypt(sendMsg)
+                    nonce = base64.b64encode(aesEncrypt.nonce).decode('utf-8')
+                    ct = base64.b64encode(ct_bytes).decode('utf-8')
+                    eMsg = json.dumps({'nonce':nonce, 'ciphertext':ct}).encode()
+                    try :    
+                        s.send(eMsg)
+                    except :
+                        print("Client disconnected cant send")
+
+                for i,s in enumerate(clientConnected_Socket):
+                    # thông báo client nào đã ngắt kết nối   
+                    SuccessMsg = nameDis + "-" + clientConnected_Name[i] + "-" + "has disconnected"
+                    sendMsg = SuccessMsg.encode()
                     key = clientConnected_SessionKey[i][:16].encode()
                     aesEncrypt = AES.new(key,AES.MODE_CTR)
                     ct_bytes = aesEncrypt.encrypt(sendMsg)
@@ -307,14 +325,14 @@ def sendeMSg(recvKey,recvSocket,keyArr):
                 recvSocket.send(eMsg)
         #Giải mã thông tin file
         elif(MsgArr[0] == "EncryFile"):
-            print('Mảng gồm các phần tử :')
-            print(MsgArr)
+            # print('Mảng gồm các phần tử :')
+            # print(MsgArr)
             nameFile = MsgArr[1]
             vitri=0
             for i in range(len(arrDataFile)) :
                 if(nameFile ==arrDataFile[i][0] ):
                     vitri=i
-                    print('Tim thay data')
+                    # print('Tim thay data')
             for i,name  in enumerate(clientConnected_Name):
                 if (name == MsgArr[2]):
                     # Mã hóa dữ liệu  gửi cho client 

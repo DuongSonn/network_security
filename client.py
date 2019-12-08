@@ -124,13 +124,22 @@ def recvdMsgTTK(key,client):
                 MsgArr = dMsg.split('-')
                 chatMsg=""
                 if (myName == MsgArr[1] and CurrentChatUsr == MsgArr[0]):
-                    for i,m in enumerate(MsgArr):
-                        if (i>1):
-                            chatMsg = chatMsg + MsgArr[i] + " "
-                    displayMsg = CurrentChatUsr + ": " + chatMsg + "\n"
-                    position = str(x) + "." + str(y)
-                    chatBox.insert(position,displayMsg)
-                    x = x + 1
+                    if (MsgArr[2] != "has disconnected(System message)" and MsgArr[2] != "has changed chat user(System message)") :
+                        for i,m in enumerate(MsgArr):
+                            if (i>1):
+                                chatMsg = chatMsg + MsgArr[i] + " "
+                        displayMsg = CurrentChatUsr + ": " + chatMsg + "\n"
+                        position = str(x) + "." + str(y)
+                        chatBox.insert(position,displayMsg)
+                        x = x + 1
+                    else :
+                        for i,m in enumerate(MsgArr):
+                            if (i>1):
+                                chatMsg = chatMsg + MsgArr[i] + " "
+                        displayMsg = CurrentChatUsr + " " + chatMsg + "\n"
+                        position = str(x) + "." + str(y)
+                        chatBox.insert(position,displayMsg)
+                        x = x + 1
         except :
             # Giả mã file nhận đc
             print('da nhan dc file ma hoa')
@@ -380,13 +389,13 @@ def chat(key,client,data):
     addButton2.grid(columnspan=2, row=8, column=6, sticky=E)
 
     threading.Thread(target=recvdMsgTTK,args=(key,client)).start()        
-    rootsC.after(2000, checSelectkUser, listbox_2)
+    rootsC.after(2000, checSelectkUser, listbox_2, key, client)
     
     
     rootsC.mainloop()
 
 #hàm kiểm tra người dùng đang chat hiện tại là ai
-def checSelectkUser(listbox):
+def checSelectkUser(listbox,key,client):
     global CurrentChatUsr
     global x
     global y
@@ -397,10 +406,16 @@ def checSelectkUser(listbox):
             y = 0
         else:
             if (CurrentChatUsr != listbox.get(ACTIVE)):
+                # thông báo đổi người chat cho client đang chat hiện tại
+                sendMsg = myName + "-" + CurrentChatUsr + "-" + "has changed chat user(System message)"
+                threadSend = threading.Thread(target=sendeMsg,args=(key,client,sendMsg,))
+                threadSend.start()
+                threadSend.join()
+                # xóa trắng khung chat
                 chatBox.delete("1.0",END)
                 x = 1
                 CurrentChatUsr = listbox.get(ACTIVE)
-    rootsC.after(2000, checSelectkUser, listbox_2)
+    rootsC.after(2000, checSelectkUser, listbox_2, key, client)
 
 #hàm cập nhập danh sách người dùng đang onl
 def CreateListUsr(listbox,data):
