@@ -14,6 +14,7 @@ mydb = mysql.connector.connect(host='localhost',database='anm',user='',password=
 -password : mật khẩu
 
 -port : cổng của mysql (mặc định 3306)
+
 5. Tạo bảng CSDL customers gồm 3 trường id(khóa chính), name, password
 6. Launch server (nếu thiếu thư viện thì tự cài thêm)
 7. Launch client
