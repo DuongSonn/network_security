@@ -205,10 +205,10 @@ def sendeMSg(recvKey,recvSocket,keyArr):
                 hash_object = SHA256.new(data)
 
                 # kiểm tra người dùng có tk chưa?
-                sql = "SELECT * FROM users WHERE name = %s AND password = %s"
-                val = (MsgArr[1], hash_object.hexdigest())
+                sql = "SELECT * FROM users WHERE name = %s"
+                val = (MsgArr[1])
                 # print('Tên người dùng :'+MsgArr[1])
-                mycursor.execute(sql, val)
+                mycursor.execute(sql, (val,))
                 myresult = mycursor.fetchall()
                 if (not myresult):
                     sql = "INSERT INTO users (name, password) VALUES (%s, %s)"
@@ -249,41 +249,53 @@ def sendeMSg(recvKey,recvSocket,keyArr):
                 recvSocket.send(eMsg)
         # đăng nhập
         elif (MsgArr[0] == "login"):
-            #Mã hóa mật khẩu mới nhận được để rồi so sánh mật khẩu đang mã hóa trong csdl (Khoa code):
-            # MsgArr[2] là mật khẩu chưa mã hóa. Mã hóa xong rồi nhớ thay 
-            data=MsgArr[2].encode()
-            hash_object = SHA256.new(data)
+            if (MsgArr[1] not in clientConnected_Name) :
+                #Mã hóa mật khẩu mới nhận được để rồi so sánh mật khẩu đang mã hóa trong csdl (Khoa code):
+                # MsgArr[2] là mật khẩu chưa mã hóa. Mã hóa xong rồi nhớ thay 
+                data=MsgArr[2].encode()
+                hash_object = SHA256.new(data)
 
-            sql = "SELECT * FROM users WHERE name = %s AND password = %s"
-            val = (MsgArr[1], hash_object.hexdigest())
-            # print('Tên người dùng :'+MsgArr[1])
-            mycursor.execute(sql, val)
-            myresult = mycursor.fetchall()
-            if (myresult):
-                SuccessMsg = ("Login successfully")
-                sendMsg = SuccessMsg.encode()
-                key = recvKey[:16].encode()
-                aesEncrypt = AES.new(key,AES.MODE_CTR)
-                ct_bytes = aesEncrypt.encrypt(sendMsg)
-                nonce = base64.b64encode(aesEncrypt.nonce).decode('utf-8')
-                ct = base64.b64encode(ct_bytes).decode('utf-8')
-                eMsg = json.dumps({'nonce':nonce, 'ciphertext':ct}).encode()    
-                recvSocket.send(eMsg)
-                # đăng nhập xong
-                clientConnected_Socket.append(recvSocket)
-                clientConnected_Name.append(MsgArr[1])
-                clientSignedIn_SessionKey.append(recvKey)
-                for i,s in enumerate(clientConnected_Socket) :
-                    # gửi danh sách socket + tên
-                    sendMsg = json.dumps(clientConnected_Name).encode()
-                    key = keyArr[i][:16].encode()
+                sql = "SELECT * FROM users WHERE name = %s AND password = %s"
+                val = (MsgArr[1], hash_object.hexdigest())
+                # print('Tên người dùng :'+MsgArr[1])
+                mycursor.execute(sql, val)
+                myresult = mycursor.fetchall()
+                if (myresult):
+                    SuccessMsg = ("Login successfully")
+                    sendMsg = SuccessMsg.encode()
+                    key = recvKey[:16].encode()
                     aesEncrypt = AES.new(key,AES.MODE_CTR)
                     ct_bytes = aesEncrypt.encrypt(sendMsg)
                     nonce = base64.b64encode(aesEncrypt.nonce).decode('utf-8')
                     ct = base64.b64encode(ct_bytes).decode('utf-8')
                     eMsg = json.dumps({'nonce':nonce, 'ciphertext':ct}).encode()    
-                    s.send(eMsg)
-            else: 
+                    recvSocket.send(eMsg)
+                    # đăng nhập xong
+                    clientConnected_Socket.append(recvSocket)
+                    clientConnected_Name.append(MsgArr[1])
+                    clientSignedIn_SessionKey.append(recvKey)
+                    for i,s in enumerate(clientConnected_Socket) :
+                        # gửi danh sách socket + tên
+                        sendMsg = json.dumps(clientConnected_Name).encode()
+                        key = keyArr[i][:16].encode()
+                        aesEncrypt = AES.new(key,AES.MODE_CTR)
+                        ct_bytes = aesEncrypt.encrypt(sendMsg)
+                        nonce = base64.b64encode(aesEncrypt.nonce).decode('utf-8')
+                        ct = base64.b64encode(ct_bytes).decode('utf-8')
+                        eMsg = json.dumps({'nonce':nonce, 'ciphertext':ct}).encode()    
+                        s.send(eMsg)
+                else: 
+                    SuccessMsg = ("Login failed")
+                    sendMsg = SuccessMsg.encode()
+                    key = recvKey[:16].encode()
+                    aesEncrypt = AES.new(key,AES.MODE_CTR)
+                    ct_bytes = aesEncrypt.encrypt(sendMsg)
+                    nonce = base64.b64encode(aesEncrypt.nonce).decode('utf-8')
+                    ct = base64.b64encode(ct_bytes).decode('utf-8')
+                    eMsg = json.dumps({'nonce':nonce, 'ciphertext':ct}).encode()    
+                    recvSocket.send(eMsg)
+                    print("Login failed")
+            else :
                 SuccessMsg = ("Login failed")
                 sendMsg = SuccessMsg.encode()
                 key = recvKey[:16].encode()
@@ -293,7 +305,6 @@ def sendeMSg(recvKey,recvSocket,keyArr):
                 ct = base64.b64encode(ct_bytes).decode('utf-8')
                 eMsg = json.dumps({'nonce':nonce, 'ciphertext':ct}).encode()    
                 recvSocket.send(eMsg)
-                print("Login failed")
         #Giải mã thông tin file
         elif(MsgArr[0] == "EncryFile"):
             print('Mảng gồm các phần tử :')

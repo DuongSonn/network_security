@@ -13,6 +13,7 @@ from tkinter import *
 import queue
 from functools import partial
 from tkinter import filedialog
+import re
 #
 from base64 import b64encode
 from Crypto.Cipher import AES
@@ -74,7 +75,6 @@ def encrypt_file(key, client, in_filename ):
         x = x + 1
         chatBox.insert(position,displayMsg) 
 
-
 #hàm gửi tin nhắn mã hóa
 def sendeMsg(key,client,message):
     sendMsg = message.encode()
@@ -116,7 +116,7 @@ def recvdMsgTTK(key,client):
             aesDecrypt = AES.new(key,AES.MODE_CTR,nonce=nonce)
             dMsg = aesDecrypt.decrypt(ct).decode()
             print("New mess from client ",client ," : " , dMsg)
-            if (dMsg == "Create new user successfully" or dMsg == "Login successfully" or (dMsg.startswith('[') and dMsg.endswith(']'))):
+            if (dMsg == "Create new user successfully" or dMsg == "Login successfully" or dMsg == "Login failed" or dMsg == "Create new user failed" or (dMsg.startswith('[') and dMsg.endswith(']'))):
                 msgQueue.put(dMsg)
                 data = msgQueue.get().split(',')
                 CreateListUsr(listbox_2,data)
@@ -144,7 +144,7 @@ def recvdMsgTTK(key,client):
             arr = pt.decode().split('-')
             nameFile = arr[1]
             dataFile = pt2
-            arrDataFile.append([nameFile,dataFile]);
+            arrDataFile.append([nameFile,dataFile])
             pt =pt.decode() #pt gồm : Tên file -client hiện tại - Client gửi file
             print('Thông tin file nhận đc :'+pt)
             print("Luu du lieu data vao mang thanh cong")
@@ -180,11 +180,10 @@ def recvdMsg(key,client,msgQueue):
     nonce = base64.b64decode(b64['nonce'])
     ct = base64.b64decode(b64['ciphertext'])
     key = key[:16].encode()
-    print(key)
     aesDecrypt = AES.new(key,AES.MODE_CTR,nonce=nonce)
     dMsg = aesDecrypt.decrypt(ct).decode()
     print("New mess from client ",client ," : " , dMsg)
-    if (dMsg == "Create new user successfully" or dMsg == "Login successfully" or (dMsg.startswith('[') and dMsg.endswith(']'))):
+    if (dMsg == "Create new user successfully" or dMsg == "Login successfully" or dMsg == "Login failed" or dMsg == "Create new user failed" or (dMsg.startswith('[') and dMsg.endswith(']'))):
         msgQueue.put(dMsg)
 
 #Khung đăng ký
@@ -217,26 +216,35 @@ def Signup(key,client):
 def FSSignup(key,client):
     sendMsg = "signup-" + nameE.get() + "-" + pwordE.get()
     if (nameE.get() != "" and pwordE.get() != ""):
+        regex = re.compile('[@_!#$%^&*()<>?/\|}{~:]')
+        if (regex.search(nameE.get()) == None and regex.search(pwordE.get()) == None) :
+            threadSend = threading.Thread(target=sendeMsg,args=(key,client,sendMsg,))
+            threadSend.start()
+            threadSend.join()
 
-        threadSend = threading.Thread(target=sendeMsg,args=(key,client,sendMsg,))
-        threadSend.start()
-        threadSend.join()
+            threadRecv = threading.Thread(target=recvdMsg,args=(key,client,msgQueue,))
+            threadRecv.start()
+            threadRecv.join()
 
-        threadRecv = threading.Thread(target=recvdMsg,args=(key,client,msgQueue,))
-        threadRecv.start()
-        threadRecv.join()
+            msg = msgQueue.get()
+            if ( msg == "Create new user successfully" ):
+                roots.destroy()
+                Login(key,client)
 
-        # if ( msgQueue.get() == "Create new user failed" ):
-        #     r = Tk()	
-        #     r.title('D:')
-        #     r.geometry('150x50')
-        #     rlbl = Label(r, text='\n! Invalid Register')
-        #     rlbl.pack()
-        #     r.mainloop()
-
-        if ( msgQueue.get() == "Create new user successfully" ):
-            roots.destroy()
-            Login(key,client)
+            if ( msg == "Create new user failed" ):
+                r = Tk()	
+                r.title('D:')
+                r.geometry('150x50')
+                rlbl = Label(r, text='\n! Invalid Register')
+                rlbl.pack()
+                r.mainloop()            
+        else :
+            r = Tk()	
+            r.title('D:')
+            r.geometry('150x50')
+            rlbl = Label(r, text='\n! Invalid Register')
+            rlbl.pack()
+            r.mainloop()
     else :
         r = Tk()	
         r.title('D:')
@@ -278,32 +286,42 @@ def Login(key,client):
 def CheckLogin(key,client):
     sendMsg = "login-" + nameEL.get() + "-" + pwordEL.get()
     if (nameEL.get()!= "" and pwordEL.get() != ""):
-        threadSend = threading.Thread(target=sendeMsg,args=(key,client,sendMsg,))
-        threadSend.start()
-        threadSend.join()
+        regex = re.compile('[@_!#$%^&*()<>?/\|}{~:]')
+        if (regex.search(nameEL.get()) == None and regex.search(pwordEL.get()) == None) :
+            threadSend = threading.Thread(target=sendeMsg,args=(key,client,sendMsg,))
+            threadSend.start()
+            threadSend.join()
 
-        threadRecv = threading.Thread(target=recvdMsg,args=(key,client,msgQueue,))
-        threadRecv.start()
-        threadRecv.join()
-        if ( msgQueue.get() == "Login successfully" ):
             threadRecv = threading.Thread(target=recvdMsg,args=(key,client,msgQueue,))
             threadRecv.start()
             threadRecv.join()
 
-            global myName
-            myName = nameEL.get()
+            msg = msgQueue.get()
+            if ( msg == "Login successfully" ):
+                threadRecv = threading.Thread(target=recvdMsg,args=(key,client,msgQueue,))
+                threadRecv.start()
+                threadRecv.join()
 
-            rootA.destroy()
-            data = msgQueue.get().split(',')
-            chat(key,client,data)
-        if ( msgQueue.get() == "Login failed"):
-            # print("KAx")
-            # r = Tk()	
-            # r.title('D:')
-            # r.geometry('150x50')
-            # rlbl = Label(r, text='\n! Invalid Login')
-            # rlbl.pack()
-            # r.mainloop()	
+                global myName
+                myName = nameEL.get()
+
+                rootA.destroy()
+                data = msgQueue.get().split(',')
+                chat(key,client,data)
+            elif ( msg == "Login failed"):
+                r = Tk()	
+                r.title('D:')
+                r.geometry('150x50')
+                rlbl = Label(r, text='\n! Invalid Login')
+                rlbl.pack()
+                r.mainloop()	
+        else :
+            r = Tk()	
+            r.title('D:')
+            r.geometry('150x50')
+            rlbl = Label(r, text='\n! Invalid Login')
+            rlbl.pack()
+            r.mainloop()
     else:
         r = Tk()	
         r.title('D:')
@@ -425,8 +443,6 @@ def MsgChat(key,client,message,chatBox,listbox):
 def replaceUsrname(data):
     data = data.replace('[','').replace('"','').replace(']','').replace(' ','')
     return data
-
-
 
 #hàm main thực hiện kết nối trao đổi khóa
 def main():
